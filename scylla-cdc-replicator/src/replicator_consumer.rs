@@ -14,6 +14,7 @@ use scylla::value::CqlValue::{Map, Set};
 use thiserror::Error;
 use tracing::warn;
 
+use scylla_cdc::CqlIdentifier;
 use scylla_cdc::consumer::*;
 
 #[derive(Error, Debug)]
@@ -81,7 +82,11 @@ impl PrecomputedQueries {
         // Iterator for both: partition keys and clustering keys.
         let keys_iter = get_keys_iter(table_schema);
 
-        let keyspace_table_name = format!("{dest_keyspace_name}.{dest_table_name}");
+        let keyspace_table_name = format!(
+            "{}.{}",
+            CqlIdentifier::new(&dest_keyspace_name),
+            CqlIdentifier::new(&dest_table_name)
+        );
         // Clone, because the iterator is consumed.
         let names = keys_iter.clone().join(",");
         let markers = keys_iter.clone().map(|_| "?").join(",");
@@ -887,12 +892,13 @@ impl ReplicatorConsumerFactory {
         dest_keyspace_name: String,
         dest_table_name: String,
     ) -> anyhow::Result<ReplicatorConsumerFactory> {
+        let dest_table_name = dest_table_name.to_ascii_lowercase();
         let table_schema = session
             .get_cluster_state()
             .get_keyspace(&dest_keyspace_name)
             .ok_or_else(|| anyhow!("Keyspace not found"))?
             .tables
-            .get(&dest_table_name.to_ascii_lowercase())
+            .get(&dest_table_name)
             .ok_or_else(|| anyhow!("Table not found"))?
             .clone();
 

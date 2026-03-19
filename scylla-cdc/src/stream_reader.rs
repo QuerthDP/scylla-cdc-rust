@@ -19,6 +19,7 @@ use tokio::sync::watch;
 use tokio::time::sleep;
 use tracing::{debug, enabled, error, warn};
 
+use crate::CqlIdentifier;
 use crate::cdc_types::{GenerationTimestamp, StreamID};
 use crate::checkpoints::{CDCCheckpointSaver, Checkpoint, start_saving_checkpoints};
 use crate::consumer::{CDCRow, CDCRowSchema, Consumer};
@@ -185,8 +186,10 @@ impl StreamReader {
         table_name: String,
         mut consumer: Box<dyn Consumer>,
     ) -> anyhow::Result<()> {
+        let keyspace = CqlIdentifier::new(keyspace);
+        let table_name = CqlIdentifier::new(format!("{table_name}_scylla_cdc_log"));
         let query = format!(
-            "SELECT * FROM {keyspace}.{table_name}_scylla_cdc_log \
+            "SELECT * FROM {keyspace}.{table_name} \
             WHERE \"cdc$stream_id\" in ? \
             AND \"cdc$time\" >= minTimeuuid(?) \
             AND \"cdc$time\" < minTimeuuid(?)  BYPASS CACHE"
