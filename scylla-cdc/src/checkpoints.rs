@@ -1,4 +1,5 @@
 //! A module representing the logic behind saving progress.
+use crate::CqlIdentifier;
 use crate::cdc_types::{GenerationTimestamp, StreamID, make_idempotent_statement};
 use anyhow;
 use async_trait::async_trait;
@@ -102,7 +103,11 @@ impl TableBackedCheckpointSaver {
         table_name: &str,
         ttl: i64,
     ) -> anyhow::Result<Self> {
-        let checkpoint_table = format!("{keyspace}.{table_name}");
+        let checkpoint_table = format!(
+            "{}.{}",
+            CqlIdentifier::new(keyspace),
+            CqlIdentifier::new(table_name)
+        );
 
         TableBackedCheckpointSaver::create_checkpoints_table(&session, &checkpoint_table).await?;
 

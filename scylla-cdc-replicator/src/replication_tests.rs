@@ -65,7 +65,7 @@ mod tests {
         let mut consumer = ReplicatorConsumer::new(
             session.clone(),
             ks_dst.to_string(),
-            name.to_string(),
+            name.to_ascii_lowercase(),
             table_schema,
         )
         .await;
