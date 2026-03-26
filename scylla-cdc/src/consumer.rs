@@ -36,16 +36,18 @@ pub trait ConsumerFactory: Sync + Send {
 #[derive(Clone, Debug, Eq, PartialEq, TryFromPrimitive)]
 #[repr(i8)]
 pub enum OperationType {
-    PreImage,
-    RowUpdate,
-    RowInsert,
-    RowDelete,
-    PartitionDelete,
-    RowRangeDelInclLeft,
-    RowRangeDelExclLeft,
-    RowRangeDelInclRight,
-    RowRangeDelExclRight,
-    PostImage,
+    PreImage = 0,
+    RowUpdate = 1,
+    RowInsert = 2,
+    #[num_enum(alternatives = [-3])]
+    RowDelete = 3,
+    #[num_enum(alternatives = [-4])]
+    PartitionDelete = 4,
+    RowRangeDelInclLeft = 5,
+    RowRangeDelExclLeft = 6,
+    RowRangeDelInclRight = 7,
+    RowRangeDelExclRight = 8,
+    PostImage = 9,
 }
 
 impl fmt::Display for OperationType {
@@ -165,6 +167,8 @@ pub struct CDCRow<'schema> {
     data: Vec<Option<CqlValue>>,
     // Maps element name to its index in the data vector.
     schema: &'schema CDCRowSchema,
+    /// Indicates whether this operation was caused by a TTL expiration.
+    pub is_expiration: bool,
 }
 
 impl CDCRow<'_> {
@@ -176,6 +180,7 @@ impl CDCRow<'_> {
         let mut end_of_batch = false;
         let mut operation = OperationType::PreImage;
         let mut ttl = None;
+        let mut is_expiration = false;
 
         let data_count =
             schema.mapping.len() + schema.deleted_mapping.len() + schema.deleted_el_mapping.len();
@@ -191,7 +196,9 @@ impl CDCRow<'_> {
             } else if i == schema.end_of_batch {
                 end_of_batch = column.is_some() && column.unwrap().as_boolean().unwrap()
             } else if i == schema.operation {
-                operation = OperationType::try_from(column.unwrap().as_tinyint().unwrap()).unwrap();
+                let raw_operation = column.unwrap().as_tinyint().unwrap();
+                is_expiration = raw_operation < 0;
+                operation = OperationType::try_from(raw_operation).unwrap();
             } else if i == schema.ttl {
                 ttl = column.map(|ttl| ttl.as_bigint().unwrap());
             } else {
@@ -205,6 +212,7 @@ impl CDCRow<'_> {
             batch_seq_no,
             end_of_batch,
             operation,
+            is_expiration,
             ttl,
             data,
             schema,
